@@ -4,35 +4,37 @@ $secureStringPwd = $password | ConvertTo-SecureString -AsPlainText -Force
 $vmcreds = New-Object System.Management.Automation.PSCredential -ArgumentList $username1, $secureStringPwd
 
 
-$subscriptionid = "36dc9859-865a-4b8b-ba25-bad71c171a5d"
-Connect-AzAccount -Subscription $subscriptionid -Credential $credsazure
+$subscriptionid = "2b738886-2a86-4d4e-a900-a00e2bf27dec"
+Connect-AzAccount -Subscription $subscriptionid #-Credential $credsazure
 set-azcontext -subscriptionid $subscriptionid
+
+Disconnect-AzAccount 
 
 New-AzResourceGroup -ResourceGroupName "myResourceGroup" -Location "EastUS"
 
 New-AzVmss `
-  -ResourceGroupName "myResourceGroup" `
-  -Location "EastUS" `
-  -VMScaleSetName "myScaleSet" `
-  -VirtualNetworkName "myVnet" `
-  -SubnetName "mySubnet" `
-  -PublicIpAddressName "myPublicIPAddress" `
-  -LoadBalancerName "myLoadBalancer" `
-  -UpgradePolicyMode "Automatic" `
-  -credential $vmCred `
-  -Vmsize Standard_DS1_v2 
-  -
+    -ResourceGroupName "myResourceGroup" `
+    -Location "EastUS" `
+    -VMScaleSetName "myScaleSet" `
+    -VirtualNetworkName "myVnet" `
+    -SubnetName "mySubnet" `
+    -PublicIpAddressName "myPublicIPAddress" `
+    -LoadBalancerName "myLoadBalancer" `
+    -UpgradePolicyMode "Automatic" `
+    -credential $vmcreds `
+    -Vmsize Standard_DS1_v2 
+  
 
-  # Define the script for your Custom Script Extension to run
+# Define the script for your Custom Script Extension to run
 $publicSettings = @{
-    "fileUris" = (,"https://raw.githubusercontent.com/Azure-Samples/compute-automation-configurations/master/automate-iis.ps1");
+    "fileUris"         = (, "https://raw.githubusercontent.com/Azure-Samples/compute-automation-configurations/master/automate-iis.ps1");
     "commandToExecute" = "powershell -ExecutionPolicy Unrestricted -File automate-iis.ps1"
 }
 
 # Get information about the scale set
 $vmss = Get-AzVmss `
-            -ResourceGroupName "myResourceGroup" `
-            -VMScaleSetName "myScaleSet"
+    -ResourceGroupName "myResourceGroup" `
+    -VMScaleSetName "myScaleSet"
 
 # Use Custom Script Extension to install IIS and configure basic website
 Add-AzVmssExtension -VirtualMachineScaleSet $vmss `
@@ -43,61 +45,70 @@ Add-AzVmssExtension -VirtualMachineScaleSet $vmss `
     -Setting $publicSettings
 
 # Update the scale set and apply the Custom Script Extension to the VM instances
-#Update-AzVmss `
-#    -ResourceGroupName "myResourceGroup" `
- #   -Name "myScaleSet" `
-#    -VirtualMachineScaleSet $vmss
+Update-AzVmss `
+    -ResourceGroupName "myResourceGroup" `
+    -Name "myScaleSet" `
+    -VirtualMachineScaleSet $vmss
 
-    # Get information about the scale set
+# Get information about the scale set
 $vmss = Get-AzVmss `
--ResourceGroupName "myResourceGroup" `
--VMScaleSetName "myScaleSet"
+    -ResourceGroupName "myResourceGroup" `
+    -VMScaleSetName "myScaleSet"
 
 #Create a rule to allow traffic over port 80
 $nsgFrontendRule = New-AzNetworkSecurityRuleConfig `
--Name myFrontendNSGRule `
--Protocol Tcp `
--Direction Inbound `
--Priority 200 `
--SourceAddressPrefix * `
--SourcePortRange * `
--DestinationAddressPrefix * `
--DestinationPortRange 80 `
--Access Allow
+    -Name myFrontendNSGRule `
+    -Protocol Tcp `
+    -Direction Inbound `
+    -Priority 200 `
+    -SourceAddressPrefix * `
+    -SourcePortRange * `
+    -DestinationAddressPrefix * `
+    -DestinationPortRange 80 `
+    -Access Allow
 
 #Create a network security group and associate it with the rule
 $nsgFrontend = New-AzNetworkSecurityGroup `
--ResourceGroupName  "myResourceGroup" `
--Location EastUS `
--Name myFrontendNSG `
--SecurityRules $nsgFrontendRule
+    -ResourceGroupName  "myResourceGroup" `
+    -Location EastUS `
+    -Name myFrontendNSG `
+    -SecurityRules $nsgFrontendRule
 
 $vnet = Get-AzVirtualNetwork `
--ResourceGroupName  "myResourceGroup" `
--Name myVnet
+    -ResourceGroupName  "myResourceGroup" `
+    -Name myVnet
 
 $frontendSubnet = $vnet.Subnets[0]
 
 $frontendSubnetConfig = Set-AzVirtualNetworkSubnetConfig `
--VirtualNetwork $vnet `
--Name mySubnet `
--AddressPrefix $frontendSubnet.AddressPrefix `
--NetworkSecurityGroup $nsgFrontend
+    -VirtualNetwork $vnet `
+    -Name mySubnet `
+    -AddressPrefix $frontendSubnet.AddressPrefix `
+    -NetworkSecurityGroup $nsgFrontend
 
 Set-AzVirtualNetwork -VirtualNetwork $vnet
 
 # Update the scale set and apply the Custom Script Extension to the VM instances
 Update-AzVmss `
--ResourceGroupName "myResourceGroup" `
--Name "myScaleSet" `
--VirtualMachineScaleSet $vmss
+    -ResourceGroupName "myResourceGroup" `
+    -Name "myScaleSet" `
+    -VirtualMachineScaleSet $vmss
 
-#add health probe just for double confirmation of reliability of VM.
+#add health probe just for double confirmation of reliability of VM.  - it does work on another my subscription when i am an owner not contributor so I am bit surprised why it does not work here :(.)
 az network lb probe create -g MyResourceGroup  `
---lb-name myLoadBalancer -n MyProbe  `
+    --lb-name myLoadBalancer -n MyProbe  `
     --protocol http  `
     --port 80  `
     --path "/" `
     --subscription $subscriptionid
 
-Get-AzPublicIpAddress -ResourceGroupName "myResourceGroup" | Select IpAddress
+Get-AzPublicIpAddress -ResourceGroupName "myResourceGroup" | select -ExpandProperty "IpAddress"
+
+
+$iptocurl = (Get-AzPublicIPAddress `
+        -ResourceGroupName $rgName `
+        -Name "myPublicIP" | select IpAddress) | select -ExpandProperty "IpAddress"
+
+Write-Output "Checking out by curl $iptocurl if the output goes from one vm to another
+curl $iptocurl
+curl $iptocurl
