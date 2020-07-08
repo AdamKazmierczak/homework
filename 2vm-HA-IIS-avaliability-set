@@ -1,0 +1,242 @@
+#script for deployment of 2 vm + loadbalancer
+#common variables 
+$subscriptionid = "36dc9859-865a-4b8b-ba25-bad71c171a5d"
+$vmname1 = "myVM1"
+$vmname2 = "myVM2"
+#Azure logon
+$credsazure = Get-Credential
+#for vm admin account
+$cred = Get-Credential
+#MSDN Platforms Subscription --36dc9859-865a-4b8b-ba25-bad71c171a5d
+Connect-AzAccount -Subscription $subscriptionid -Credential $credsazure
+set-azcontext -subscriptionid $subscriptionid
+
+Get-AzContext 
+
+#resource group deployment
+$rgName = 'MyResourceGroupSLB'
+$location = 'eastus'
+New-AzResourceGroup -Name $rgName -Location $location
+
+#public ip deployment for the IIS /in this example I did used SKU basic for Standard Loadbalancer / no zone IP 
+$publicIp = New-AzPublicIpAddress `
+    -ResourceGroupName $rgName `
+    -Name 'myPublicIP' `
+    -Location $location `
+    -AllocationMethod static `
+    -SKU Standard
+
+
+### no needed
+#create  public IP zonal / 
+#$publicIp = New-AzPublicIpAddress `
+#    -ResourceGroupName $rgName `
+#    -Name 'myPublicIP' `
+#    -Location $location `
+#    -AllocationMethod static `
+#    -SKU standard `
+#    -zone 1
+
+#vm-deployment
+#create vnets
+
+# Create subnet config
+$subnetConfig = New-AzVirtualNetworkSubnetConfig `
+    -Name "mySubnet" `
+    -AddressPrefix 10.0.2.0/24
+
+# Create the virtual network
+$vnet = New-AzVirtualNetwork `
+    -ResourceGroupName "myResourceGroupSLB" `
+    -Location $location `
+    -Name "myVnet" `
+    -AddressPrefix 10.0.0.0/16 `
+    -Subnet $subnetConfig
+
+#Create public ip for VM deployment
+$RdpPublicIP_1 = New-AzPublicIpAddress `
+    -Name "RdpPublicIP_1" `
+    -ResourceGroupName $RgName `
+    -Location $location  `
+    -SKU Standard `
+    -AllocationMethod static
+ 
+$RdpPublicIP_2 = New-AzPublicIpAddress `
+    -Name "RdpPublicIP_2" `
+    -ResourceGroupName $RgName `
+    -Location $location  `
+    -SKU Standard `
+    -AllocationMethod static
+
+#create networks security groups settings port 3389 and port 80 
+ 
+$rule1 = New-AzNetworkSecurityRuleConfig -Name 'myNetworkSecurityGroupRuleRDP' -Description 'Allow RDP' `
+    -Access Allow -Protocol Tcp -Direction Inbound -Priority 1000 `
+    -SourceAddressPrefix Internet -SourcePortRange * `
+    -DestinationAddressPrefix * -DestinationPortRange 3389
+
+$rule2 = New-AzNetworkSecurityRuleConfig -Name 'myNetworkSecurityGroupRuleHTTP' -Description 'Allow HTTP' `
+    -Access Allow -Protocol Tcp -Direction Inbound -Priority 2000 `
+    -SourceAddressPrefix Internet -SourcePortRange * `
+    -DestinationAddressPrefix * -DestinationPortRange 80
+
+$nsg = New-AzNetworkSecurityGroup -ResourceGroupName $RgName -Location $location `
+    -Name 'myNetworkSecurityGroup' -SecurityRules $rule1, $rule2
+
+#load balancer creation
+
+#frontend public IP 
+$feip = New-AzLoadBalancerFrontendIpConfig -Name 'myFrontEndPool' -PublicIpAddress $publicIp
+
+#create backend pool for loadbalancer
+$bepool = New-AzLoadBalancerBackendAddressPoolConfig -Name 'myBackEndPool'
+
+#create healthprobes for loadbalancer = port 80
+$probe = New-AzLoadBalancerProbeConfig `
+    -Name 'myHealthProbe' `
+    -Protocol Http -Port 80 `
+    -RequestPath / -IntervalInSeconds 5 -ProbeCount 2
+
+#setup rules for loadbalancer
+$rule = New-AzLoadBalancerRuleConfig `
+    -Name 'myLoadBalancerRuleWeb' -Protocol Tcp `
+    -Probe $probe -FrontendPort 80 -BackendPort 80 `
+    -FrontendIpConfiguration $feip `
+    -BackendAddressPool $bePool
+
+#Setup nat rules for loadbalancer +rules for port 80 and for rdp in port 4221
+$natrule1 = New-AzLoadBalancerInboundNatRuleConfig `
+    -Name 'myLoadBalancerRDP1' `
+    -FrontendIpConfiguration $feip `
+    -Protocol tcp -FrontendPort 4221 `
+    -BackendPort 3389
+
+$natrule2 = New-AzLoadBalancerInboundNatRuleConfig `
+    -Name 'myLoadBalancerRDP2' `
+    -FrontendIpConfiguration $feip `
+    -Protocol tcp `
+    -FrontendPort 4222 `
+    -BackendPort 3389
+
+#create loadbalancer
+$lb = New-AzLoadBalancer `
+    -ResourceGroupName $rgName `
+    -Name 'MyLoadBalancer' `
+    -SKU Standard `
+    -Location $location `
+    -FrontendIpConfiguration $feip `
+    -BackendAddressPool $bepool `
+    -Probe $probe `
+    -LoadBalancingRule $rule `
+    -InboundNatRule $natrule1, $natrule2
+
+
+#Create network interfaces for Vm's  vm1 and vm2
+
+# Create NIC for VM1
+$nicVM1 = New-AzNetworkInterface -ResourceGroupName $rgName -Location $location `
+    -Name 'MyNic1' -PublicIpAddress $RdpPublicIP_1 -LoadBalancerBackendAddressPool $bepool -NetworkSecurityGroup $nsg `
+    -LoadBalancerInboundNatRule $natrule1 -Subnet $vnet.Subnets[0]
+
+# Create NIC for VM2
+$nicVM2 = New-AzNetworkInterface -ResourceGroupName $rgName -Location $location `
+    -Name 'MyNic2' -PublicIpAddress $RdpPublicIP_2 -LoadBalancerBackendAddressPool $bepool -NetworkSecurityGroup $nsg `
+    -LoadBalancerInboundNatRule $natrule2 -Subnet $vnet.Subnets[0]
+
+# ############## VM1 ###############
+
+# Create a virtual machine configuration
+$vmConfig = New-AzVMConfig -VMName 'MyVm1' -VMSize Standard_DS1_v2 -AvailabilitySetID $AvailabilitySet.Id `
+| Set-AzVMOperatingSystem -Windows -ComputerName 'MyVm1' -Credential $cred `
+| Set-AzVMSourceImage -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2019-Datacenter -Version latest `
+| Add-AzVMNetworkInterface -Id $nicVM1.Id
+
+# Create a virtual machine
+$vm1 = New-AzVM -ResourceGroupName $rgName -Zone 1 -Location $location -VM $vmConfig
+
+# ############## VM2 ###############
+
+# Create a virtual machine configuration
+$vmConfig = New-AzVMConfig -VMName 'MyVm2' -VMSize Standard_DS1_v2 `
+| Set-AzVMOperatingSystem -Windows -ComputerName 'MyVm2' -Credential $cred `
+| Set-AzVMSourceImage -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2019-Datacenter -Version latest `
+| Add-AzVMNetworkInterface -Id $nicVM2.Id
+
+# Create a virtual machine
+$vm2 = New-AzVM -ResourceGroupName $rgName -Zone 2 -Location $location -VM $vmConfig
+
+#IP as a checkup
+$vm1_rdp_ip = (Get-AzPublicIPAddress -ResourceGroupName $rgName -Name "RdpPublicIP_1").IpAddress
+$vm2_rdp_ip = (Get-AzPublicIPAddress -ResourceGroupName $rgName -Name "RdpPublicIP_2").IpAddress
+
+
+# Use CustomScript extension to install IIS.
+#vm 1 install IIS
+az vm run-command invoke `
+    --command-id RunPowerShellScript `
+    --name $vmname1 -g $rgName `
+    --scripts 'Install-WindowsFeature -Name Web-Server' `
+    --subscription $subscriptionid
+
+#Install custom page for tests
+#remove default web page  vm 1
+az vm run-command invoke `
+    --command-id RunPowerShellScript `
+    --name $vmname1 -g $rgName `
+    --scripts 'remove-item  C:\inetpub\wwwroot\iisstart.htm' `
+    --subscription $subscriptionid
+
+#add hostname webpage vm 1
+az vm run-command invoke `
+    --command-id RunPowerShellScript `
+    --name $vmname1 -g $rgName `
+    --scripts ' Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $($env:computername)' `
+    --subscription $subscriptionid
+
+
+#vm number 2
+az vm run-command invoke `
+    --command-id RunPowerShellScript `
+    --name $vmname2 -g $rgName `
+    --scripts 'Install-WindowsFeature -Name Web-Server ' `
+    --subscription $subscriptionid
+
+#remove default web page 
+az vm run-command invoke `
+    --command-id RunPowerShellScript `
+    --name $vmname2 -g $rgName `
+    --scripts 'remove-item  C:\inetpub\wwwroot\iisstart.htm' `
+    --subscription $subscriptionid
+
+#add hostname webpage
+az vm run-command invoke `
+    --command-id RunPowerShellScript `
+    --name $vmname2 -g $rgName `
+    --scripts ' Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $($env:computername)' `
+    --subscription $subscriptionid
+
+#test loadbalancer
+Get-AzPublicIPAddress `
+    -ResourceGroupName $rgName `
+    -Name "myPublicIP" | select IpAddress
+
+$iptocurl = (Get-AzPublicIPAddress `
+        -ResourceGroupName $rgName `
+        -Name "myPublicIP" | select IpAddress) | select -ExpandProperty "IpAddress"
+
+
+#final tests regarding Homework and HA of IIS.
+curl $iptocurl
+
+#stop vm
+az vm stop -g $rgName -n $vmname1 --subscription $subscriptionid
+curl $iptocurl # you should receive output such as vmname2
+az vm start -g $rgName -n $vmname1 --subscription $subscriptionid
+
+curl $iptocurl 
+
+az vm stop -g $rgName -n $vmname2 --subscription $subscriptionid
+curl $iptocurl # you should receive output such as vmname1
+az vm start -g $rgName -n $vmname2 --subscription $subscriptionid
+
+
