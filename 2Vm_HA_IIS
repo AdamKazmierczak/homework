@@ -130,17 +130,17 @@ $lb = New-AzLoadBalancer `
     -InboundNatRule $natrule1, $natrule2
 
 
-    #Create network interfaces for Vm's  vm1 and vm2
+#Create network interfaces for Vm's  vm1 and vm2
 
 # Create NIC for VM1
 $nicVM1 = New-AzNetworkInterface -ResourceGroupName $rgName -Location $location `
--Name 'MyNic1' -PublicIpAddress $RdpPublicIP_1 -LoadBalancerBackendAddressPool $bepool -NetworkSecurityGroup $nsg `
--LoadBalancerInboundNatRule $natrule1 -Subnet $vnet.Subnets[0]
+    -Name 'MyNic1' -PublicIpAddress $RdpPublicIP_1 -LoadBalancerBackendAddressPool $bepool -NetworkSecurityGroup $nsg `
+    -LoadBalancerInboundNatRule $natrule1 -Subnet $vnet.Subnets[0]
 
 # Create NIC for VM2
 $nicVM2 = New-AzNetworkInterface -ResourceGroupName $rgName -Location $location `
--Name 'MyNic2' -PublicIpAddress $RdpPublicIP_2 -LoadBalancerBackendAddressPool $bepool -NetworkSecurityGroup $nsg `
--LoadBalancerInboundNatRule $natrule2 -Subnet $vnet.Subnets[0]
+    -Name 'MyNic2' -PublicIpAddress $RdpPublicIP_2 -LoadBalancerBackendAddressPool $bepool -NetworkSecurityGroup $nsg `
+    -LoadBalancerInboundNatRule $natrule2 -Subnet $vnet.Subnets[0]
 
 
 # ############## VM1 ###############
@@ -173,56 +173,56 @@ $vm2_rdp_ip = (Get-AzPublicIPAddress -ResourceGroupName $rgName -Name "RdpPublic
 # Use CustomScript extension to install IIS.
 #vm 1 install IIS
 az vm run-command invoke `
---command-id RunPowerShellScript `
---name $vmname1 -g $rgName `
---scripts 'Install-WindowsFeature -Name Web-Server' `
---subscription $subscriptionid
+    --command-id RunPowerShellScript `
+    --name $vmname1 -g $rgName `
+    --scripts 'Install-WindowsFeature -Name Web-Server' `
+    --subscription $subscriptionid
 
 #Install custom page for tests
 #remove default web page  vm 1
 az vm run-command invoke `
---command-id RunPowerShellScript `
---name $vmname1 -g $rgName `
---scripts 'remove-item  C:\inetpub\wwwroot\iisstart.htm' `
---subscription $subscriptionid
+    --command-id RunPowerShellScript `
+    --name $vmname1 -g $rgName `
+    --scripts 'remove-item  C:\inetpub\wwwroot\iisstart.htm' `
+    --subscription $subscriptionid
 
 #add hostname webpage vm 1
 az vm run-command invoke `
---command-id RunPowerShellScript `
---name $vmname1 -g $rgName `
---scripts ' Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $($env:computername)' `
---subscription $subscriptionid
+    --command-id RunPowerShellScript `
+    --name $vmname1 -g $rgName `
+    --scripts ' Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $($env:computername)' `
+    --subscription $subscriptionid
 
 
 #vm number 2
 az vm run-command invoke `
---command-id RunPowerShellScript `
---name $vmname2 -g $rgName `
---scripts 'Install-WindowsFeature -Name Web-Server ' `
---subscription $subscriptionid
+    --command-id RunPowerShellScript `
+    --name $vmname2 -g $rgName `
+    --scripts 'Install-WindowsFeature -Name Web-Server ' `
+    --subscription $subscriptionid
 
 #remove default web page 
 az vm run-command invoke `
---command-id RunPowerShellScript `
---name $vmname2 -g $rgName `
---scripts 'remove-item  C:\inetpub\wwwroot\iisstart.htm' `
---subscription $subscriptionid
+    --command-id RunPowerShellScript `
+    --name $vmname2 -g $rgName `
+    --scripts 'remove-item  C:\inetpub\wwwroot\iisstart.htm' `
+    --subscription $subscriptionid
 
 #add hostname webpage
 az vm run-command invoke `
---command-id RunPowerShellScript `
---name $vmname2 -g $rgName `
---scripts ' Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $($env:computername)' `
---subscription $subscriptionid
+    --command-id RunPowerShellScript `
+    --name $vmname2 -g $rgName `
+    --scripts ' Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $($env:computername)' `
+    --subscription $subscriptionid
 
 #test loadbalancer
 Get-AzPublicIPAddress `
     -ResourceGroupName $rgName `
     -Name "myPublicIP" | select IpAddress
 
-$iptocurl= (Get-AzPublicIPAddress `
--ResourceGroupName $rgName `
--Name "myPublicIP" | select IpAddress) |select -ExpandProperty "IpAddress"
+$iptocurl = (Get-AzPublicIPAddress `
+        -ResourceGroupName $rgName `
+        -Name "myPublicIP" | select IpAddress) | select -ExpandProperty "IpAddress"
 
 
 #final tests regarding Homework and HA of IIS.
