@@ -1,3 +1,5 @@
+#Password and user left out intentionaly, also subscription.
+
 $username1 = "AzureUser"
 $password = "SomethingStron2018!@#"
 $secureStringPwd = $password | ConvertTo-SecureString -AsPlainText -Force 
