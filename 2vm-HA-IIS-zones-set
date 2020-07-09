@@ -26,7 +26,6 @@ $publicIp = New-AzPublicIpAddress `
     -AllocationMethod static `
     -SKU Standard
 
-
 ### no needed
 #create  public IP zonal / 
 #$publicIp = New-AzPublicIpAddress `
@@ -130,7 +129,6 @@ $lb = New-AzLoadBalancer `
     -LoadBalancingRule $rule `
     -InboundNatRule $natrule1, $natrule2
 
-
 #Create network interfaces for Vm's  vm1 and vm2
 
 # Create NIC for VM1
@@ -146,7 +144,7 @@ $nicVM2 = New-AzNetworkInterface -ResourceGroupName $rgName -Location $location 
 # ############## VM1 ###############
 
 # Create a virtual machine configuration
-$vmConfig = New-AzVMConfig -VMName 'MyVm1' -VMSize Standard_DS1_v2 -AvailabilitySetID $AvailabilitySet.Id `
+$vmConfig = New-AzVMConfig -VMName 'MyVm1' -VMSize Standard_DS1_v2  `
 | Set-AzVMOperatingSystem -Windows -ComputerName 'MyVm1' -Credential $cred `
 | Set-AzVMSourceImage -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2019-Datacenter -Version latest `
 | Add-AzVMNetworkInterface -Id $nicVM1.Id
