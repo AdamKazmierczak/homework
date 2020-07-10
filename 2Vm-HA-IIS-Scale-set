@@ -10,10 +10,10 @@ set-azcontext -subscriptionid $subscriptionid
 
 #Disconnect-AzAccount 
 
-New-AzResourceGroup -ResourceGroupName "myResourceGroup2" -Location "EastUS"
+New-AzResourceGroup -ResourceGroupName "myResourceGroup" -Location "EastUS"
 
 New-AzVmss `
-    -ResourceGroupName "myResourceGroup2" `
+    -ResourceGroupName "myResourceGroup" `
     -Location "EastUS" `
     -VMScaleSetName "myScaleSet" `
     -VirtualNetworkName "myVnet" `
