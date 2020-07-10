@@ -51,7 +51,6 @@ Update-AzVmss `
     -ResourceGroupName "myResourceGroup" `
     -Name "myScaleSet" `
     -VirtualMachineScaleSet $vmss
-    -zone 1 2 
 
 # Get information about the scale set
 $vmss = Get-AzVmss `
