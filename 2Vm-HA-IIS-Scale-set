@@ -1,21 +1,19 @@
-#Password and user left out intentionaly, also subscription.
-
-#defining variables.
 $username1 = "AzureUser"
 $password = "SomethingStron2018!@#"
 $secureStringPwd = $password | ConvertTo-SecureString -AsPlainText -Force 
 $vmcreds = New-Object System.Management.Automation.PSCredential -ArgumentList $username1, $secureStringPwd
 
+
 $subscriptionid = "2b738886-2a86-4d4e-a900-a00e2bf27dec"
 Connect-AzAccount -Subscription $subscriptionid #-Credential $credsazure
 set-azcontext -subscriptionid $subscriptionid
 
-#Disconnect-AzAccount  #left out during developing
+#Disconnect-AzAccount 
 
-New-AzResourceGroup -ResourceGroupName "myResourceGroup" -Location "EastUS"
+New-AzResourceGroup -ResourceGroupName "myResourceGroup2" -Location "EastUS"
 
 New-AzVmss `
-    -ResourceGroupName "myResourceGroup" `
+    -ResourceGroupName "myResourceGroup2" `
     -Location "EastUS" `
     -VMScaleSetName "myScaleSet" `
     -VirtualNetworkName "myVnet" `
@@ -24,8 +22,10 @@ New-AzVmss `
     -LoadBalancerName "myLoadBalancer" `
     -UpgradePolicyMode "Automatic" `
     -credential $vmcreds `
-    -Vmsize Standard_DS1_v2 
-  
+    -Vmsize Standard_DS1_v2 `
+    -InstanceCount 2 `
+    -zone "1", "2", "3" 
+   
 
 # Define the script for your Custom Script Extension to run
 $publicSettings = @{
@@ -51,6 +51,7 @@ Update-AzVmss `
     -ResourceGroupName "myResourceGroup" `
     -Name "myScaleSet" `
     -VirtualMachineScaleSet $vmss
+    -zone 1 2 
 
 # Get information about the scale set
 $vmss = Get-AzVmss `
@@ -106,7 +107,7 @@ az network lb probe create -g MyResourceGroup  `
 
 Get-AzPublicIpAddress -ResourceGroupName "myResourceGroup" | select -ExpandProperty "IpAddress"
 
-#checking out deployment
+
 $iptocurl = (Get-AzPublicIPAddress `
         -ResourceGroupName $rgName `
         -Name "myPublicIP" | select IpAddress) | select -ExpandProperty "IpAddress"
